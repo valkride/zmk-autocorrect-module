@@ -139,16 +139,13 @@ static int auto_correct_keycode_pressed(const zmk_event_t *eh) {
 
 static int auto_correct_init(const struct device *dev) {
     LOG_INF("Autocorrect module initialized with %d correction pairs", ARRAY_SIZE(corrections));
+    LOG_INF("Autocorrect ready - typo detection available for: teh->the, adn->and, yuo->you, etc.");
     
     // Initialize work queue
     k_work_init_delayable(&auto_correct_data.correction_work, correction_work_handler);
     
     return 0;
 }
-
-// Event listener setup
-ZMK_LISTENER(behavior_auto_correct, auto_correct_keycode_pressed);
-ZMK_SUBSCRIPTION(behavior_auto_correct, zmk_keycode_state_changed);
 
 // Device initialization
 SYS_INIT(auto_correct_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
