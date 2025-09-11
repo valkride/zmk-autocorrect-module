@@ -101,11 +101,9 @@ static void process_completed_word(void) {
 
 // Event listener for keycode state changed events
 static int auto_correct_keycode_pressed(const zmk_event_t *eh) {
-    // Simple approach: cast directly without using ZMK helper functions
-    const struct zmk_keycode_state_changed *ev = (const struct zmk_keycode_state_changed *)eh;
-    
-    // Basic validation
-    if (!ev || !ev->state) {
+    // Use the same pattern as auto_layer module - just cast and check state
+    struct zmk_keycode_state_changed *ev = (struct zmk_keycode_state_changed *)eh;
+    if (ev == NULL || !ev->state) {
         return ZMK_EV_EVENT_BUBBLE;
     }
 
@@ -148,16 +146,9 @@ static int auto_correct_init(const struct device *dev) {
     return 0;
 }
 
-// Event listener setup - try simple approach without helper macros first
-static struct zmk_listener auto_correct_listener = {
-    .handler = auto_correct_keycode_pressed,
-};
-
-static int auto_correct_listener_init(const struct device *dev) {
-    zmk_event_manager_add_listener(&auto_correct_listener);
-    return 0;
-}
+// Event listener setup
+ZMK_LISTENER(behavior_auto_correct, auto_correct_keycode_pressed);
+ZMK_SUBSCRIPTION(behavior_auto_correct, zmk_keycode_state_changed);
 
 // Device initialization
 SYS_INIT(auto_correct_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
-SYS_INIT(auto_correct_listener_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY + 1);
