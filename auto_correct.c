@@ -79,30 +79,17 @@ static int autocorrect_listener(const zmk_event_t *eh) {
         if (is_trigger(keycode)) {
             // Apply correction by generating events
             for (int i = 0; i < state.backspaces_needed; i++) {
-                struct zmk_keycode_state_changed backspace_ev = {
-                    .keycode = BSPC,
-                    .implicit_modifiers = 0,
-                    .explicit_modifiers = 0,
-                    .state = true
-                };
-                ZMK_EVENT_RAISE(new_zmk_keycode_state_changed(backspace_ev));
-                backspace_ev.state = false;
-                ZMK_EVENT_RAISE(new_zmk_keycode_state_changed(backspace_ev));
+                raise_zmk_keycode_state_changed_from_encoded(BSPC, true, k_uptime_get());
+                raise_zmk_keycode_state_changed_from_encoded(BSPC, false, k_uptime_get());
             }
             
             // Type correction
             for (int i = 0; state.pending_correction[i]; i++) {
                 char c = state.pending_correction[i];
                 if (c >= 'a' && c <= 'z') {
-                    struct zmk_keycode_state_changed correct_ev = {
-                        .keycode = A + (c - 'a'),
-                        .implicit_modifiers = 0,
-                        .explicit_modifiers = 0,
-                        .state = true
-                    };
-                    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed(correct_ev));
-                    correct_ev.state = false;
-                    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed(correct_ev));
+                    uint32_t keycode_encoded = A + (c - 'a');
+                    raise_zmk_keycode_state_changed_from_encoded(keycode_encoded, true, k_uptime_get());
+                    raise_zmk_keycode_state_changed_from_encoded(keycode_encoded, false, k_uptime_get());
                 }
             }
             
