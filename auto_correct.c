@@ -3,30 +3,17 @@
 #include <ctype.h>
 
 #include <zephyr/device.h>
-#include <zephyr/devicetree.h>
-#include <zephyr/drivers/led.h>
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
 
-#include <zmk/ble.h>
 #include <zmk/endpoints.h>
 #include <zmk/keymap.h>
-#include <zmk/behavior.h>
 #include <zmk/hid.h>
-#include <zmk/usb.h>
-#include <zmk/split/bluetooth/peripheral.h>
-#include <zmk/battery.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/position_state_changed.h>
-#include <zmk/events/layer_state_changed.h>
-#include <zmk/events/keycode_state_changed.h>
 #include <dt-bindings/zmk/keys.h>
 
-#include <zephyr/logging/log.h>
-
 #include "trie_dict.h"
-
-LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #define MAX_WORD_LENGTH 32
 #define AUTOCORRECT_MIN_WORD_LENGTH 3
@@ -81,137 +68,87 @@ static const char* get_correction(const char* word) {
     return NULL; // No correction found
 }
 
-// Function to actually send key events
-static void send_keycode_event(uint16_t keycode, bool pressed) {
-    struct zmk_keycode_state_changed_event {
-        struct zmk_event_header header;
-        uint16_t keycode;
-        uint8_t implicit_modifiers;
-        uint8_t explicit_modifiers;
-        bool state;
-        int64_t timestamp;
-    } ev = {
-        .keycode = keycode,
-        .implicit_modifiers = 0,
-        .explicit_modifiers = 0,
-        .state = pressed,
-        .timestamp = k_uptime_get()
-    };
-    
-    ZMK_EVENT_RAISE(zmk_keycode_state_changed, ev);
+// Function to send a key press/release
+static void send_key(uint16_t keycode) {
+    zmk_hid_keyboard_press(keycode);
+    zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
+    k_msleep(5);
+    zmk_hid_keyboard_release(keycode);
+    zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
+    k_msleep(5);
 }
 
-// Function to perform actual correction with real key replacement
+// Function to perform actual correction
 static void perform_correction(const char *wrong_word, const char *correct_word) {
     int wrong_len = strlen(wrong_word);
     int correct_len = strlen(correct_word);
     
-    // Set flag to prevent infinite loops during correction
     auto_correct_data.correction_in_progress = true;
-    
-    LOG_INF("AUTO-CORRECTING: '%s' -> '%s'", wrong_word, correct_word);
     
     // Send backspaces to remove wrong word
     for (int i = 0; i < wrong_len; i++) {
-        send_keycode_event(BSPC, true);   // Press backspace
-        k_msleep(10);
-        send_keycode_event(BSPC, false);  // Release backspace  
-        k_msleep(10);
+        send_key(BSPC);
     }
     
     // Type the correct word
     for (int i = 0; i < correct_len; i++) {
         char c = correct_word[i];
-        uint16_t keycode = 0;
-        
-        // Convert character to keycode
         if (c >= 'a' && c <= 'z') {
-            keycode = A + (c - 'a');
+            send_key(A + (c - 'a'));
         } else if (c >= 'A' && c <= 'Z') {
-            // Handle uppercase with shift
-            send_keycode_event(LSHFT, true);
-            keycode = A + (c - 'A');
-        }
-        
-        if (keycode > 0) {
-            send_keycode_event(keycode, true);   // Press key
-            k_msleep(10);
-            send_keycode_event(keycode, false);  // Release key
-            k_msleep(10);
-            
-            // Release shift if it was pressed
-            if (c >= 'A' && c <= 'Z') {
-                send_keycode_event(LSHFT, false);
-                k_msleep(10);
-            }
+            zmk_hid_keyboard_press(LSHFT);
+            zmk_hid_keyboard_press(A + (c - 'A'));
+            zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
+            k_msleep(5);
+            zmk_hid_keyboard_release(A + (c - 'A'));
+            zmk_hid_keyboard_release(LSHFT);
+            zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
+            k_msleep(5);
         }
     }
     
-    // Store the corrected word
     strncpy(auto_correct_data.last_corrected_word, correct_word, MAX_WORD_LENGTH - 1);
-    
-    // Clear correction flag
     auto_correct_data.correction_in_progress = false;
 }
 
-// inits main struct
 static int auto_correct_init(const struct device *dev) {
-    LOG_INF("Auto-correct module initialized");
     return 0;
 }
 
-// Function to handle position state changes
 static int auto_correct_position_changed(const zmk_event_t *eh) {
     struct zmk_position_state_changed *ev = as_zmk_position_state_changed(eh);
     if (ev == NULL || auto_correct_data.correction_in_progress) {
         return ZMK_EV_EVENT_BUBBLE;
     }
     
-    // Only process key press events
     if (!ev->state) {
         return ZMK_EV_EVENT_BUBBLE;
     }
     
-    // Get the keycode from the keymap
     uint16_t keycode = zmk_keymap_keycode_from_position(ev->position);
     
-    // Handle letter keys
     if (keycode >= A && keycode <= Z) {
         char letter = 'a' + (keycode - A);
         
-        // Add letter to current word if we have space
         if (auto_correct_data.word_pos < MAX_WORD_LENGTH - 1) {
             auto_correct_data.current_word[auto_correct_data.word_pos] = letter;
             auto_correct_data.word_pos++;
             auto_correct_data.current_word[auto_correct_data.word_pos] = '\0';
             auto_correct_data.in_word = true;
         }
-        
-        LOG_DBG("Building word: '%s'", auto_correct_data.current_word);
     }
-    // Handle word boundary characters (space, punctuation, etc.)
-    else if (keycode == SPACE || 
-             keycode == DOT ||
-             keycode == COMMA ||
-             keycode == RET ||
-             keycode == TAB) {
-        
-        // If we were building a word, check for corrections
+    else if (keycode == SPACE || keycode == DOT || keycode == COMMA || keycode == RET || keycode == TAB) {
         if (auto_correct_data.in_word && auto_correct_data.word_pos >= AUTOCORRECT_MIN_WORD_LENGTH) {
-            LOG_DBG("Word complete: '%s', checking for corrections", auto_correct_data.current_word);
-            
             const char *correction = get_correction(auto_correct_data.current_word);
             if (correction) {
                 perform_correction(auto_correct_data.current_word, correction);
             }
         }
         
-        // Reset word buffer
         auto_correct_data.word_pos = 0;
         auto_correct_data.current_word[0] = '\0';
         auto_correct_data.in_word = false;
     }
-    // Handle backspace - reset word buffer
     else if (keycode == BSPC) {
         if (auto_correct_data.word_pos > 0) {
             auto_correct_data.word_pos--;
@@ -221,7 +158,6 @@ static int auto_correct_position_changed(const zmk_event_t *eh) {
             auto_correct_data.in_word = false;
         }
     }
-    // Any other key resets word buffer
     else {
         auto_correct_data.word_pos = 0;
         auto_correct_data.current_word[0] = '\0';
@@ -231,9 +167,7 @@ static int auto_correct_position_changed(const zmk_event_t *eh) {
     return ZMK_EV_EVENT_BUBBLE;
 }
 
-// manages new position presses
 ZMK_LISTENER(behavior_auto_correct, auto_correct_position_changed);
 ZMK_SUBSCRIPTION(behavior_auto_correct, zmk_position_state_changed);
 
-// Initialize the auto-correct module
 SYS_INIT(auto_correct_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);
