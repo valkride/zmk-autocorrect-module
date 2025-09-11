@@ -1,192 +1,161 @@
-#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
 #include <zephyr/logging/log.h>
+#include <string.h>
+#include <ctype.h>
 
 #include <zmk/event_manager.h>
 #include <zmk/events/keycode_state_changed.h>
+#include <zmk/hid.h>
+#include <zmk/endpoints.h>
 #include <dt-bindings/zmk/keys.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-#define MAX_WORD_LENGTH 32
-#define AUTOCORRECT_MIN_WORD_LENGTH 3
+#define AUTOCORRECT_MAX_LENGTH 127
+#define AUTOCORRECT_MIN_LENGTH 5
 
-// Autocorrect pairs - expandable dictionary
-struct correction_pair {
-    const char* wrong;
-    const char* correct;
+// Autocorrect data structure
+static struct {
+    uint8_t buffer[AUTOCORRECT_MAX_LENGTH];
+    uint8_t length;
+    bool suppressed;
+} autocorrect_state;
+
+// Simple autocorrect dictionary - based on QMK's approach
+// Format: [typo_length][typo][correction_length][correction]
+static const uint8_t autocorrect_data[] = {
+    // "teh" -> "the"
+    3, 't', 'e', 'h', 3, 't', 'h', 'e',
+    // "adn" -> "and"  
+    3, 'a', 'd', 'n', 3, 'a', 'n', 'd',
+    // "taht" -> "that"
+    4, 't', 'a', 'h', 't', 4, 't', 'h', 'a', 't',
+    // "recieve" -> "receive"
+    7, 'r', 'e', 'c', 'i', 'e', 'v', 'e', 7, 'r', 'e', 'c', 'e', 'i', 'v', 'e',
+    // "seperate" -> "separate" 
+    8, 's', 'e', 'p', 'e', 'r', 'a', 't', 'e', 8, 's', 'e', 'p', 'a', 'r', 'a', 't', 'e',
+    // End marker
+    0
 };
 
-static const struct correction_pair corrections[] = {
-    {"teh", "the"},
-    {"adn", "and"},
-    {"taht", "that"},
-    {"ot", "to"},
-    {"fo", "of"},
-    {"wiht", "with"},
-    {"thsi", "this"},
-    {"si", "is"},
-    {"yuo", "you"},
-    {"jsut", "just"},
-    {"cna", "can"},
-    {"ahve", "have"},
-    {"woudl", "would"},
-    {"shoudl", "should"},
-    {"recieve", "receive"},
-};
-
-// Structure to hold autocorrect state
-struct behavior_auto_correct_data {
-    char current_word[MAX_WORD_LENGTH];
-    int word_pos;
-    bool in_word;
-    struct k_work_delayable correction_work;
-};
-
-static struct behavior_auto_correct_data auto_correct_data = {
-    .current_word = {0},
-    .word_pos = 0,
-    .in_word = false
-};
-
-// Find correction for a word
-static const char* find_correction(const char* word) {
-    for (int i = 0; i < ARRAY_SIZE(corrections); i++) {
-        if (strcmp(word, corrections[i].wrong) == 0) {
-            return corrections[i].correct;
-        }
-    }
-    return NULL;
+// Check if character should trigger autocorrect check
+static bool is_autocorrect_trigger(uint16_t keycode) {
+    return (keycode == SPACE || keycode == DOT || keycode == COMMA ||
+            keycode == QMARK || keycode == EXCL || keycode == RET);
 }
 
-// Work handler for delayed correction
-static void correction_work_handler(struct k_work *work) {
-    LOG_INF("Performing autocorrection...");
+// Send a sequence of keycodes
+static void send_autocorrect_keycode(uint16_t keycode) {
+    zmk_hid_keyboard_press(keycode);
+    zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
+    k_msleep(1);
+    zmk_hid_keyboard_release(keycode);
+    zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
+    k_msleep(1);
+}
+
+// Perform the autocorrection
+static void apply_autocorrect(uint8_t backspaces, const uint8_t *correction, uint8_t correction_length) {
+    autocorrect_state.suppressed = true;
     
-    // Find the correction for the last typed word
-    const char* correction = find_correction(auto_correct_data.current_word);
-    if (correction) {
-        int wrong_len = strlen(auto_correct_data.current_word);
-        int correct_len = strlen(correction);
-        
-        LOG_INF("Correcting '%s' (%d chars) to '%s' (%d chars)", 
-                auto_correct_data.current_word, wrong_len, correction, correct_len);
-        
-        // Simulate backspaces to delete wrong word
-        for (int i = 0; i < wrong_len; i++) {
-            LOG_DBG("Backspace %d", i + 1);
-            // Here we would send BACKSPACE keycode
-        }
-        
-        // Simulate typing the correct word
-        for (int i = 0; i < correct_len; i++) {
-            char c = correction[i];
-            LOG_DBG("Type '%c'", c);
-            // Here we would send the keycode for character c
-        }
-        
-        LOG_INF("Autocorrection completed: %s", correction);
+    // Send backspaces
+    for (uint8_t i = 0; i < backspaces; i++) {
+        send_autocorrect_keycode(BSPC);
     }
     
-    // Reset state
-    auto_correct_data.in_word = false;
-    auto_correct_data.word_pos = 0;
-    memset(auto_correct_data.current_word, 0, sizeof(auto_correct_data.current_word));
-}
-
-// Check if keycode is a letter
-static bool is_letter_key(uint16_t keycode) {
-    return (keycode >= A && keycode <= Z);
-}
-
-// Check if keycode is a word separator
-static bool is_word_separator(uint16_t keycode) {
-    return (keycode == SPACE || keycode == ENTER || keycode == TAB ||
-            keycode == DOT || keycode == COMMA || keycode == SEMI ||
-            keycode == EXCLAMATION || keycode == QUESTION);
-}
-
-// Process a word when it's completed
-static void process_completed_word(void) {
-    if (auto_correct_data.word_pos >= AUTOCORRECT_MIN_WORD_LENGTH) {
-        auto_correct_data.current_word[auto_correct_data.word_pos] = '\0';
-        
-        const char* correction = find_correction(auto_correct_data.current_word);
-        if (correction) {
-            LOG_INF("AUTOCORRECT: '%s' -> '%s'", auto_correct_data.current_word, correction);
-            
-            // Schedule correction work to avoid event handling recursion
-            k_work_schedule(&auto_correct_data.correction_work, K_MSEC(50));
+    // Send correction
+    for (uint8_t i = 0; i < correction_length; i++) {
+        char c = correction[i];
+        if (c >= 'a' && c <= 'z') {
+            send_autocorrect_keycode(A + (c - 'a'));
+        } else if (c >= 'A' && c <= 'Z') {
+            // Handle uppercase (would need shift logic)
+            send_autocorrect_keycode(A + (c - 'A'));
         }
     }
     
-    // Reset word state
-    auto_correct_data.in_word = false;
-    auto_correct_data.word_pos = 0;
-    memset(auto_correct_data.current_word, 0, sizeof(auto_correct_data.current_word));
+    autocorrect_state.suppressed = false;
+    LOG_INF("Autocorrected with %d backspaces, %d chars", backspaces, correction_length);
 }
 
-// Event listener for keycode state changed events
-static int auto_correct_keycode_pressed(const zmk_event_t *eh) {
-    // Use the same pattern as auto_layer module - just cast and check state
-    struct zmk_keycode_state_changed *ev = (struct zmk_keycode_state_changed *)eh;
-    if (ev == NULL || !ev->state) {
+// Check buffer against autocorrect dictionary
+static bool check_autocorrect(void) {
+    if (autocorrect_state.length < AUTOCORRECT_MIN_LENGTH) {
+        return false;
+    }
+    
+    const uint8_t *data = autocorrect_data;
+    
+    while (*data) {
+        uint8_t typo_length = *data++;
+        const uint8_t *typo = data;
+        data += typo_length;
+        uint8_t correction_length = *data++;
+        const uint8_t *correction = data;
+        data += correction_length;
+        
+        // Check if we have a match at the end of our buffer
+        if (typo_length <= autocorrect_state.length) {
+            uint8_t start_pos = autocorrect_state.length - typo_length;
+            if (memcmp(&autocorrect_state.buffer[start_pos], typo, typo_length) == 0) {
+                apply_autocorrect(typo_length, correction, correction_length);
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+// Handle keycode events
+static int autocorrect_keycode_listener(const zmk_event_t *eh) {
+    struct zmk_keycode_state_changed *ev = as_zmk_keycode_state_changed(eh);
+    if (ev == NULL || !ev->state || autocorrect_state.suppressed) {
         return ZMK_EV_EVENT_BUBBLE;
     }
-
+    
     uint16_t keycode = ev->keycode;
     
-    LOG_DBG("Keycode pressed: %d", keycode);
-
-    if (is_letter_key(keycode)) {
-        // Start or continue building a word
-        if (!auto_correct_data.in_word) {
-            auto_correct_data.in_word = true;
-            auto_correct_data.word_pos = 0;
-            memset(auto_correct_data.current_word, 0, sizeof(auto_correct_data.current_word));
-        }
+    // Handle letters
+    if (keycode >= A && keycode <= Z) {
+        char c = 'a' + (keycode - A);
         
-        if (auto_correct_data.word_pos < MAX_WORD_LENGTH - 1) {
-            char letter = 'a' + (keycode - A);
-            auto_correct_data.current_word[auto_correct_data.word_pos++] = letter;
-        }
-    } else if (is_word_separator(keycode)) {
-        if (auto_correct_data.in_word) {
-            process_completed_word();
-        }
-    } else {
-        // Other keys (numbers, symbols) - end word if in one
-        if (auto_correct_data.in_word) {
-            process_completed_word();
+        // Add to buffer
+        if (autocorrect_state.length < AUTOCORRECT_MAX_LENGTH - 1) {
+            autocorrect_state.buffer[autocorrect_state.length++] = c;
+        } else {
+            // Shift buffer left
+            memmove(autocorrect_state.buffer, autocorrect_state.buffer + 1, AUTOCORRECT_MAX_LENGTH - 1);
+            autocorrect_state.buffer[AUTOCORRECT_MAX_LENGTH - 1] = c;
         }
     }
-
+    // Handle autocorrect triggers
+    else if (is_autocorrect_trigger(keycode)) {
+        check_autocorrect();
+    }
+    // Handle backspace
+    else if (keycode == BSPC) {
+        if (autocorrect_state.length > 0) {
+            autocorrect_state.length--;
+        }
+    }
+    // Other keys reset the buffer
+    else {
+        autocorrect_state.length = 0;
+    }
+    
     return ZMK_EV_EVENT_BUBBLE;
 }
 
-// Manual event subscription to avoid macro issues
-static struct zmk_listener auto_correct_listener = {
-    .callback = auto_correct_keycode_pressed,
-};
-
-static int auto_correct_init(const struct device *dev) {
-    LOG_INF("Autocorrect module initialized with %d correction pairs", ARRAY_SIZE(corrections));
-    LOG_INF("Autocorrect ready - typo detection available for: teh->the, adn->and, yuo->you, etc.");
-    
-    // Initialize work queue
-    k_work_init_delayable(&auto_correct_data.correction_work, correction_work_handler);
-    
-    // Register event listener manually
-    int ret = zmk_event_manager_add_listener(&auto_correct_listener);
-    if (ret < 0) {
-        LOG_ERR("Failed to register autocorrect listener: %d", ret);
-        return ret;
-    }
-    
-    LOG_INF("Autocorrect keystroke monitoring active!");
+// Initialize autocorrect
+static int autocorrect_init(const struct device *dev) {
+    memset(&autocorrect_state, 0, sizeof(autocorrect_state));
+    LOG_INF("Autocorrect initialized");
     return 0;
 }
 
-// Device initialization
-SYS_INIT(auto_correct_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+ZMK_LISTENER(autocorrect, autocorrect_keycode_listener);
+ZMK_SUBSCRIPTION(autocorrect, zmk_keycode_state_changed);
+
+SYS_INIT(autocorrect_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);
