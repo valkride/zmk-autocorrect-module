@@ -21,6 +21,7 @@
 #include <zmk/events/layer_state_changed.h>
 #include <zmk/events/keycode_state_changed.h>
 #include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/modifiers.h>
 #include <dt-bindings/zmk/hid_usage_pages.h>
 
 #include <zephyr/logging/log.h>
@@ -64,14 +65,9 @@ static const char* get_correction(const char* word) {
     return NULL; // No correction found
 }
 
-// Function to send HID key events using ZMK's HID system
-static void send_key_sequence(uint16_t keycode, bool pressed) {
-    if (pressed) {
-        zmk_hid_keyboard_press(keycode);
-    } else {
-        zmk_hid_keyboard_release(keycode);
-    }
-    zmk_endpoints_send_report(HID_USAGE_KEY);
+// Function to send key events using ZMK's event system
+static void send_key_sequence(uint32_t encoded_key, bool pressed) {
+    raise_zmk_keycode_state_changed_from_encoded(encoded_key, pressed, k_uptime_get());
     k_msleep(10); // Small delay between key events
 }
 
@@ -87,34 +83,27 @@ static void perform_correction(const char *wrong_word, const char *correct_word)
     
     // Send backspaces to remove wrong word
     for (int i = 0; i < wrong_len; i++) {
-        send_key_sequence(HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE, true);
-        send_key_sequence(HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE, false);
+        send_key_sequence(BSPC, true);
+        send_key_sequence(BSPC, false);
         k_msleep(20);
     }
     
     // Type the correct word
     for (int i = 0; i < correct_len; i++) {
         char c = correct_word[i];
-        uint16_t keycode = 0;
+        uint32_t key = 0;
         
-        // Convert character to HID keycode
+        // Convert character to ZMK key
         if (c >= 'a' && c <= 'z') {
-            keycode = HID_USAGE_KEY_KEYBOARD_A + (c - 'a');
+            key = A + (c - 'a');  // ZMK keys A-Z
         } else if (c >= 'A' && c <= 'Z') {
-            // Handle uppercase with shift
-            send_key_sequence(HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, true);
-            keycode = HID_USAGE_KEY_KEYBOARD_A + (c - 'A');
+            key = LS(A + (c - 'A'));  // Shift + letter for uppercase
         }
         
-        if (keycode > 0) {
-            send_key_sequence(keycode, true);
-            send_key_sequence(keycode, false);
+        if (key > 0) {
+            send_key_sequence(key, true);
+            send_key_sequence(key, false);
             k_msleep(20);
-            
-            // Release shift if it was pressed
-            if (c >= 'A' && c <= 'Z') {
-                send_key_sequence(HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, false);
-            }
         }
     }
     
