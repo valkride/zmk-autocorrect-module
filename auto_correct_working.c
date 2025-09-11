@@ -173,7 +173,9 @@ static int auto_correct_position_changed(const zmk_event_t *eh) {
     }
     
     // Get the keycode from the keymap
-    uint16_t keycode = zmk_keymap_keycode_from_position(ev->position);
+    // TODO: zmk_keymap_keycode_from_position doesn't exist in current ZMK API
+    // For now, skip position-based keycode detection
+    uint16_t keycode = 0; // Placeholder - this function needs keycode events instead
     
     // Handle letter keys
     if (keycode >= A && keycode <= Z) {
