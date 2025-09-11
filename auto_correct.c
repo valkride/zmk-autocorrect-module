@@ -6,6 +6,7 @@
 
 #include <zmk/event_manager.h>
 #include <zmk/events/keycode_state_changed.h>
+#include <zmk/keys.h>
 #include <dt-bindings/zmk/keys.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -67,7 +68,7 @@ static void perform_correction(const char *wrong_word, const char *correct_word)
 
 // Event listener for keycode state changed events
 static int auto_correct_keycode_pressed(const zmk_event_t *eh) {
-    const struct zmk_keycode_state_changed *ev = cast_zmk_keycode_state_changed(eh);
+    struct zmk_keycode_state_changed *ev = as_zmk_keycode_state_changed(eh);
     if (ev == NULL || auto_correct_data.correction_in_progress) {
         return ZMK_EV_EVENT_BUBBLE;
     }
