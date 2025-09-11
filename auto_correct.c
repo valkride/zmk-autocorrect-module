@@ -6,9 +6,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
 
-#include <zmk/endpoints.h>
 #include <zmk/keymap.h>
-#include <zmk/hid.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/position_state_changed.h>
 #include <dt-bindings/zmk/keys.h>
@@ -68,46 +66,13 @@ static const char* get_correction(const char* word) {
     return NULL; // No correction found
 }
 
-// Function to send a key press/release
-static void send_key(uint16_t keycode) {
-    zmk_hid_keyboard_press(keycode);
-    zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
-    k_msleep(5);
-    zmk_hid_keyboard_release(keycode);
-    zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
-    k_msleep(5);
-}
-
 // Function to perform actual correction
 static void perform_correction(const char *wrong_word, const char *correct_word) {
-    int wrong_len = strlen(wrong_word);
-    int correct_len = strlen(correct_word);
-    
     auto_correct_data.correction_in_progress = true;
     
-    // Send backspaces to remove wrong word
-    for (int i = 0; i < wrong_len; i++) {
-        send_key(BSPC);
-    }
-    
-    // Type the correct word
-    for (int i = 0; i < correct_len; i++) {
-        char c = correct_word[i];
-        if (c >= 'a' && c <= 'z') {
-            send_key(A + (c - 'a'));
-        } else if (c >= 'A' && c <= 'Z') {
-            zmk_hid_keyboard_press(LSHFT);
-            zmk_hid_keyboard_press(A + (c - 'A'));
-            zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
-            k_msleep(5);
-            zmk_hid_keyboard_release(A + (c - 'A'));
-            zmk_hid_keyboard_release(LSHFT);
-            zmk_endpoints_send_report(HID_USAGE_DESKTOP_KEYBOARD);
-            k_msleep(5);
-        }
-    }
-    
+    // For now, store the correction - actual key injection to be implemented
     strncpy(auto_correct_data.last_corrected_word, correct_word, MAX_WORD_LENGTH - 1);
+    
     auto_correct_data.correction_in_progress = false;
 }
 
