@@ -21,6 +21,7 @@
 #include <zmk/events/layer_state_changed.h>
 #include <zmk/events/keycode_state_changed.h>
 #include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/hid_usage_pages.h>
 
 #include <zephyr/logging/log.h>
 
@@ -70,7 +71,7 @@ static void send_key_sequence(uint16_t keycode, bool pressed) {
     } else {
         zmk_hid_keyboard_release(keycode);
     }
-    zmk_endpoints_send_report(ZMK_ENDPOINT_USB);
+    zmk_endpoints_send_report(HID_USAGE_KEY);
     k_msleep(10); // Small delay between key events
 }
 
