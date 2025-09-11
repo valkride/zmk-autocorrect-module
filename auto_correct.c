@@ -6,6 +6,7 @@
 #include <zmk/event_manager.h>
 #include <zmk/events/keycode_state_changed.h>
 #include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/hid_usage_pages.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -65,6 +66,9 @@ static void check_corrections(void) {
         return;
     }
 }
+
+// Forward declaration  
+static int autocorrect_listener(const zmk_event_t *eh);
 
 static int autocorrect_listener(const zmk_event_t *eh) {
     struct zmk_keycode_state_changed *ev = as_zmk_keycode_state_changed(eh);
@@ -129,13 +133,13 @@ static int autocorrect_listener(const zmk_event_t *eh) {
     return ZMK_EV_EVENT_BUBBLE;
 }
 
+ZMK_LISTENER(autocorrect, autocorrect_listener);
+ZMK_SUBSCRIPTION(autocorrect, zmk_keycode_state_changed);
+
 static int autocorrect_init(const struct device *dev) {
     memset(&state, 0, sizeof(state));
     LOG_INF("Autocorrect module initialized");
     return 0;
 }
-
-ZMK_LISTENER(autocorrect, autocorrect_listener);
-ZMK_SUBSCRIPTION(autocorrect, zmk_keycode_state_changed);
 
 SYS_INIT(autocorrect_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);
