@@ -1,0 +1,12 @@
+description: Autocorrect behavior
+
+compatible: "zmk,behavior-autocorrect"
+
+include: one_param.yaml
+
+properties:
+  label:
+    type: string
+    required: true
+  #display-name:
+  #  type: string

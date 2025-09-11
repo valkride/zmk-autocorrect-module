@@ -1,95 +1,41 @@
-#include <zephyr/kernel.h>
-#include <zephyr/init.h>
-#include <zephyr/logging/log.h>
-#include <string.h>
+#define DT_DRV_COMPAT zmk_behavior_autocorrect
 
-#include <zmk/event_manager.h>
-#include <zmk/events/keycode_state_changed.h>
-#include <dt-bindings/zmk/keys.h>
+#include <zephyr/device.h>
+#include <drivers/behavior.h>
+#include <zephyr/logging/log.h>
+
+#include <zmk/behavior.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-#define BUFFER_SIZE 32
+#if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
-static struct {
-    char buffer[BUFFER_SIZE];
-    uint8_t length;
-} state = {0};
-
-static bool is_letter(uint16_t keycode) {
-    return keycode >= A && keycode <= Z;
-}
-
-static bool is_trigger(uint16_t keycode) {
-    return keycode == SPACE || keycode == DOT || keycode == COMMA || 
-           keycode == RET || keycode == QMARK || keycode == EXCL;
-}
-
-static char keycode_to_char(uint16_t keycode) {
-    if (keycode >= A && keycode <= Z) {
-        return 'a' + (keycode - A);
-    }
+static int behavior_autocorrect_init(const struct device *dev) {
+    LOG_INF("Autocorrect behavior initialized");
     return 0;
 }
 
-static void check_typos(void) {
-    if (state.length < 3) return;
-    
-    // Check "teh" -> log it for now
-    if (state.length >= 3 && 
-        strncmp(&state.buffer[state.length - 3], "teh", 3) == 0) {
-        LOG_INF("Detected typo: teh -> should be 'the'");
-        return;
-    }
-    
-    // Check "adn" -> log it
-    if (state.length >= 3 && 
-        strncmp(&state.buffer[state.length - 3], "adn", 3) == 0) {
-        LOG_INF("Detected typo: adn -> should be 'and'");
-        return;
-    }
+static int on_keymap_binding_pressed(struct zmk_behavior_binding *binding,
+                                     struct zmk_behavior_binding_event event) {
+    LOG_INF("Autocorrect behavior triggered");
+    return ZMK_BEHAVIOR_OPAQUE;
 }
 
-static int autocorrect_listener(const zmk_event_t *eh) {
-    // Use the working pattern from zmk source
-    const struct zmk_keycode_state_changed *ev = as_zmk_keycode_state_changed(eh);
-    if (ev == NULL || !ev->state) {
-        return ZMK_EV_EVENT_BUBBLE;
-    }
-    
-    uint16_t keycode = ev->keycode;
-    
-    // Track typing
-    if (is_letter(keycode)) {
-        char c = keycode_to_char(keycode);
-        if (c && state.length < BUFFER_SIZE - 1) {
-            state.buffer[state.length++] = c;
-            state.buffer[state.length] = '\0';
-            LOG_DBG("Buffer: %s", state.buffer);
-        }
-    } else if (is_trigger(keycode)) {
-        check_typos();
-    } else if (keycode == BSPC) {
-        if (state.length > 0) {
-            state.length--;
-            state.buffer[state.length] = '\0';
-        }
-    } else {
-        // Reset on other keys
-        state.length = 0;
-        state.buffer[0] = '\0';
-    }
-    
-    return ZMK_EV_EVENT_BUBBLE;
+static int on_keymap_binding_released(struct zmk_behavior_binding *binding,
+                                      struct zmk_behavior_binding_event event) {
+    return ZMK_BEHAVIOR_OPAQUE;
 }
 
-ZMK_LISTENER(autocorrect, autocorrect_listener);
-ZMK_SUBSCRIPTION(autocorrect, zmk_keycode_state_changed);
+static const struct behavior_driver_api behavior_autocorrect_driver_api = {
+    .binding_pressed = on_keymap_binding_pressed,
+    .binding_released = on_keymap_binding_released,
+};
 
-static int autocorrect_init(const struct device *dev) {
-    memset(&state, 0, sizeof(state));
-    LOG_INF("ZMK Autocorrect module loaded - typo detection active");
-    return 0;
-}
+#define AC_INST(n)                                                                                 \
+    BEHAVIOR_DT_INST_DEFINE(n, behavior_autocorrect_init, NULL, NULL, NULL, POST_KERNEL,         \
+                             CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,                                  \
+                             &behavior_autocorrect_driver_api);
 
-SYS_INIT(autocorrect_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);
+DT_INST_FOREACH_STATUS_OKAY(AC_INST)
+
+#endif
