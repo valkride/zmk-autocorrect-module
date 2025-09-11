@@ -67,7 +67,7 @@ static void perform_correction(const char *wrong_word, const char *correct_word)
 
 // Event listener for keycode state changed events
 static int auto_correct_keycode_pressed(const zmk_event_t *eh) {
-    struct zmk_keycode_state_changed *ev = as_zmk_keycode_state_changed(eh);
+    const struct zmk_keycode_state_changed *ev = cast_zmk_keycode_state_changed(eh);
     if (ev == NULL || auto_correct_data.correction_in_progress) {
         return ZMK_EV_EVENT_BUBBLE;
     }
@@ -149,5 +149,5 @@ static int auto_correct_init(const struct device *dev) {
 ZMK_LISTENER(behavior_auto_correct, auto_correct_keycode_pressed);
 ZMK_SUBSCRIPTION(behavior_auto_correct, zmk_keycode_state_changed);
 
-// Device initialization
+// Device initialization  
 SYS_INIT(auto_correct_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
