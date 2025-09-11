@@ -87,8 +87,8 @@ static void perform_correction(const char *wrong_word, const char *correct_word)
     
     // Send backspaces to remove wrong word
     for (int i = 0; i < wrong_len; i++) {
-        send_key_sequence(HID_USAGE_KEY_KEYBOARD_BACKSPACE, true);
-        send_key_sequence(HID_USAGE_KEY_KEYBOARD_BACKSPACE, false);
+        send_key_sequence(HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE, true);
+        send_key_sequence(HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE, false);
         k_msleep(20);
     }
     
@@ -102,7 +102,7 @@ static void perform_correction(const char *wrong_word, const char *correct_word)
             keycode = HID_USAGE_KEY_KEYBOARD_A + (c - 'a');
         } else if (c >= 'A' && c <= 'Z') {
             // Handle uppercase with shift
-            send_key_sequence(HID_USAGE_KEY_KEYBOARD_LEFT_SHIFT, true);
+            send_key_sequence(HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, true);
             keycode = HID_USAGE_KEY_KEYBOARD_A + (c - 'A');
         }
         
@@ -113,7 +113,7 @@ static void perform_correction(const char *wrong_word, const char *correct_word)
             
             // Release shift if it was pressed
             if (c >= 'A' && c <= 'Z') {
-                send_key_sequence(HID_USAGE_KEY_KEYBOARD_LEFT_SHIFT, false);
+                send_key_sequence(HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, false);
             }
         }
     }
@@ -155,9 +155,9 @@ static int auto_correct_keycode_pressed(const zmk_event_t *eh) {
     }
     // Handle word boundary characters (space, punctuation, etc.)
     else if (keycode == HID_USAGE_KEY_KEYBOARD_SPACEBAR || 
-             keycode == HID_USAGE_KEY_KEYBOARD_PERIOD ||
-             keycode == HID_USAGE_KEY_KEYBOARD_COMMA ||
-             keycode == HID_USAGE_KEY_KEYBOARD_RETURN ||
+             keycode == HID_USAGE_KEY_KEYBOARD_PERIOD_AND_GREATER_THAN ||
+             keycode == HID_USAGE_KEY_KEYBOARD_COMMA_AND_LESS_THAN ||
+             keycode == HID_USAGE_KEY_KEYBOARD_RETURN_ENTER ||
              keycode == HID_USAGE_KEY_KEYBOARD_TAB) {
         
         // If we were building a word, check for corrections
@@ -176,7 +176,7 @@ static int auto_correct_keycode_pressed(const zmk_event_t *eh) {
         auto_correct_data.in_word = false;
     }
     // Handle backspace - adjust word buffer
-    else if (keycode == HID_USAGE_KEY_KEYBOARD_BACKSPACE) {
+    else if (keycode == HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE) {
         if (auto_correct_data.word_pos > 0) {
             auto_correct_data.word_pos--;
             auto_correct_data.current_word[auto_correct_data.word_pos] = '\0';
