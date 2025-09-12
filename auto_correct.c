@@ -14,6 +14,8 @@
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
+#if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
+
 #define AUTOCORRECT_BUFFER_SIZE 32
 
 static struct {
@@ -216,12 +218,7 @@ ZMK_LISTENER(behavior_autocorrect, autocorrect_listener_wrapper);
 ZMK_SUBSCRIPTION(behavior_autocorrect, zmk_keycode_state_changed);
 
 static int autocorrect_listener_wrapper(const zmk_event_t *eh) {
-    // Only listen to keycode events when autocorrect behavior is present
-    #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
     return autocorrect_keycode_listener(eh);
-    #else
-    return ZMK_EV_EVENT_BUBBLE;
-    #endif
 }
 
 #define AC_INST(n)                                                                                 \
