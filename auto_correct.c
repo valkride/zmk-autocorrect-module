@@ -3,6 +3,8 @@
 #include <zephyr/logging/log.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/keycode_state_changed.h>
+#include <zmk/hid.h>
+#include <dt-bindings/zmk/keys.h>
 #include <string.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -31,16 +33,71 @@ static const struct typo_correction typos[MAX_TYPOS] = {
 
 static char word_buffer[WORD_BUFFER_SIZE] = {0};
 static int buffer_pos = 0;
+static bool correcting = false;
 
-// Simple correction notification (we'll enhance this incrementally)
+// Convert character to ZMK keycode
+static uint32_t char_to_keycode(char c) {
+    if (c >= 'a' && c <= 'z') {
+        return ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (c - 'a'));
+    } else if (c >= 'A' && c <= 'Z') {
+        return ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (c - 'A'));
+    }
+    return 0;
+}
+
+// Send REAL keystroke correction 
 static void send_correction(const char* typo, const char* correction) {
-    LOG_INF("🔧 Typo detected: '%s' should be '%s'", typo, correction);
-    LOG_INF("📝 Correction would replace %d chars with %d chars", 
-            (int)strlen(typo), (int)strlen(correction));
+    if (correcting) return; // Prevent recursion
+    correcting = true;
     
-    // For now, just log the correction
-    // We'll add the actual keystroke injection in the next iteration
-    // after ensuring the basic detection works
+    int typo_len = strlen(typo);
+    int correction_len = strlen(correction);
+    int64_t timestamp = k_uptime_get();
+    
+    LOG_INF("� CORRECTING: '%s' -> '%s'", typo, correction);
+    
+    // Send backspaces to delete the typo
+    for (int i = 0; i < typo_len; i++) {
+        raise_zmk_keycode_state_changed_from_encoded(
+            ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE), 
+            true, timestamp);
+        k_msleep(5);
+        raise_zmk_keycode_state_changed_from_encoded(
+            ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE), 
+            false, timestamp + 1);
+        k_msleep(5);
+    }
+    
+    // Type the correction
+    for (int i = 0; i < correction_len; i++) {
+        uint32_t keycode = char_to_keycode(correction[i]);
+        if (keycode) {
+            // Handle uppercase
+            bool shift = (correction[i] >= 'A' && correction[i] <= 'Z');
+            
+            if (shift) {
+                raise_zmk_keycode_state_changed_from_encoded(
+                    ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_LEFT_SHIFT), 
+                    true, timestamp);
+                k_msleep(5);
+            }
+            
+            raise_zmk_keycode_state_changed_from_encoded(keycode, true, timestamp);
+            k_msleep(5);
+            raise_zmk_keycode_state_changed_from_encoded(keycode, false, timestamp + 1);
+            
+            if (shift) {
+                k_msleep(5);
+                raise_zmk_keycode_state_changed_from_encoded(
+                    ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_LEFT_SHIFT), 
+                    false, timestamp + 2);
+            }
+            k_msleep(10);
+        }
+    }
+    
+    LOG_INF("✅ Correction complete!");
+    correcting = false;
 }
 
 // Check if current word is a typo and correct it
@@ -71,7 +128,7 @@ static void add_to_buffer(char c) {
 // Handle keycode events
 static int autocorrect_keycode_listener(const zmk_event_t *eh) {
     const struct zmk_keycode_state_changed *ev = as_zmk_keycode_state_changed(eh);
-    if (!ev || !ev->state) return ZMK_EV_EVENT_BUBBLE; // Only on key press
+    if (!ev || !ev->state || correcting) return ZMK_EV_EVENT_BUBBLE; // Only on key press, skip when correcting
     
     uint16_t keycode = ev->keycode;
     
@@ -81,7 +138,8 @@ static int autocorrect_keycode_listener(const zmk_event_t *eh) {
         keycode == HID_USAGE_KEY_KEYBOARD_PERIOD ||
         keycode == HID_USAGE_KEY_KEYBOARD_COMMA ||
         keycode == HID_USAGE_KEY_KEYBOARD_SEMICOLON ||
-        keycode == HID_USAGE_KEY_KEYBOARD_EXCLAMATION) {
+        keycode == HID_USAGE_KEY_KEYBOARD_APOSTROPHE_AND_QUOTE ||
+        keycode == HID_USAGE_KEY_KEYBOARD_GRAVE_ACCENT_AND_TILDE) {
         check_and_correct();
         return ZMK_EV_EVENT_BUBBLE;
     }
@@ -92,10 +150,14 @@ static int autocorrect_keycode_listener(const zmk_event_t *eh) {
         add_to_buffer(c);
     }
     
-    // Clear buffer on backspace
+    // Clear buffer on backspace or non-letter keys
     if (keycode == HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE) {
         if (buffer_pos > 0) buffer_pos--;
         word_buffer[buffer_pos] = '\0';
+    } else if (keycode < HID_USAGE_KEY_KEYBOARD_A || keycode > HID_USAGE_KEY_KEYBOARD_Z) {
+        // Non-letter key pressed, reset buffer (except for separators which are handled above)
+        buffer_pos = 0;
+        memset(word_buffer, 0, WORD_BUFFER_SIZE);
     }
     
     return ZMK_EV_EVENT_BUBBLE;
@@ -105,9 +167,10 @@ ZMK_LISTENER(autocorrect, autocorrect_keycode_listener);
 ZMK_SUBSCRIPTION(autocorrect, zmk_keycode_state_changed);
 
 static int zmk_autocorrect_init(const struct device *dev) {
-    LOG_INF("🎯 ZMK Autocorrect Module Active!");
-    LOG_INF("📝 Monitoring for %d common typos", MAX_TYPOS);
-    LOG_INF("✨ Real-time autocorrect ready!");
+    LOG_INF("🎯 ZMK Autocorrect Module ACTIVE!");
+    LOG_INF("⚡ REAL keystroke correction enabled");
+    LOG_INF("📝 Correcting %d typos: teh->the, adn->and, yuo->you, etc.", MAX_TYPOS);
+    LOG_INF("🚀 Type normally - corrections happen automatically!");
     return 0;
 }
 
