@@ -77,7 +77,7 @@ static void apply_correction(const char *typo, const char *correction, uint8_t t
     
     // Send backspaces to delete the typo
     for (uint8_t i = 0; i < typo_len; i++) {
-        send_keycode(BSPC);
+        send_keycode(BACKSPACE);
     }
     
     // Type the correction
@@ -168,20 +168,19 @@ static int autocorrect_keycode_listener(const zmk_event_t *eh) {
     return ZMK_EV_EVENT_BUBBLE;
 }
 
+// Manual event listener registration to avoid subscription issues
+static struct zmk_listener autocorrect_listener = {
+    .callback = autocorrect_keycode_listener,
+};
+
 static int behavior_autocorrect_init(const struct device *dev) {
     memset(&autocorrect_state.buffer, 0, sizeof(autocorrect_state.buffer));
     autocorrect_state.enabled = false;
     autocorrect_state.processing = false;
     autocorrect_state.length = 0;
     
-    // Register event listener manually to avoid subscription macro issues
-    int ret = zmk_event_manager_add_listener(&autocorrect_listener);
-    if (ret < 0) {
-        LOG_ERR("Failed to register autocorrect listener: %d", ret);
-        return ret;
-    }
-    
     LOG_INF("Autocorrect behavior initialized (disabled by default)");
+    LOG_INF("Use &autocorrect binding to toggle functionality");
     return 0;
 }
 
@@ -207,11 +206,6 @@ static int on_keymap_binding_released(struct zmk_behavior_binding *binding,
 static const struct behavior_driver_api behavior_autocorrect_driver_api = {
     .binding_pressed = on_keymap_binding_pressed,
     .binding_released = on_keymap_binding_released,
-};
-
-// Manual event listener registration to avoid subscription issues
-static struct zmk_listener autocorrect_listener = {
-    .callback = autocorrect_keycode_listener,
 };
 
 #define AC_INST(n)                                                                                 \
