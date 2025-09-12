@@ -44,10 +44,10 @@ static int buffer_pos = 0;
 // Convert character to ZMK keycode
 static uint32_t char_to_keycode(char c) {
     if (c >= 'a' && c <= 'z') {
-        return ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (c - 'a'));
+        return ZMK_HID_USAGE(HID_USAGE_KEY, (HID_USAGE_KEY_KEYBOARD_A + (c - 'a')));
     }
     if (c >= 'A' && c <= 'Z') {
-        return ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (c - 'A'));
+        return ZMK_HID_USAGE(HID_USAGE_KEY, (HID_USAGE_KEY_KEYBOARD_A + (c - 'A')));
     }
     return 0;
 }
@@ -116,7 +116,16 @@ static void send_key_via_behavior(uint32_t keycode, bool pressed) {
         .param2 = 0
     };
     
-    int ret = zmk_behavior_invoke_binding(&binding, pressed);
+    struct zmk_behavior_binding_event event = {
+        .layer = 0,
+        .position = 0,
+        .timestamp = k_uptime_get()
+#if IS_ENABLED(CONFIG_ZMK_SPLIT)
+        ,.source = 0
+#endif
+    };
+    
+    int ret = zmk_behavior_invoke_binding(&binding, event, pressed);
     if (ret < 0) {
         LOG_ERR("Failed to invoke behavior for keycode %d: %d", keycode, ret);
     }
@@ -124,7 +133,7 @@ static void send_key_via_behavior(uint32_t keycode, bool pressed) {
 
 static void send_backspaces_real(int count) {
     LOG_INF("🔧 Sending %d REAL backspaces via behavior system...", count);
-    uint32_t backspace_keycode = ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE);
+    uint32_t backspace_keycode = ZMK_HID_USAGE(HID_USAGE_KEY, (HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE));
     
     for (int i = 0; i < count; i++) {
         send_key_via_behavior(backspace_keycode, true);   // Press
@@ -139,7 +148,7 @@ static void send_text_real(const char* text) {
     
     for (int i = 0; text[i] != '\0'; i++) {
         if (text[i] >= 'a' && text[i] <= 'z') {
-            uint32_t keycode = ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (text[i] - 'a'));
+            uint32_t keycode = ZMK_HID_USAGE(HID_USAGE_KEY, (HID_USAGE_KEY_KEYBOARD_A + (text[i] - 'a')));
             send_key_via_behavior(keycode, true);   // Press
             k_msleep(20);
             send_key_via_behavior(keycode, false);  // Release
