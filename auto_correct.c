@@ -91,7 +91,7 @@ static void perform_autocorrect_action(const char* typo, const char* correction)
     
     LOG_INF("🔥 REAL AUTOCORRECT ACTIVATED!");
     LOG_INF("   📝 Detected typo: '%s'", typo);
-    LOG_INF("   � ACTUALLY fixing it to: '%s'", correction);
+    LOG_INF("   🚀 ACTUALLY fixing it to: '%s'", correction);
     
     // Actually send the keystrokes to fix the typo!
     send_backspaces(typo_len);
@@ -146,7 +146,7 @@ static void add_char_to_buffer(char c) {
 K_WORK_DELAYABLE_DEFINE(autocorrect_demo_work, NULL);
 
 static void autocorrect_demo_handler(struct k_work *work) {
-    LOG_INF("� REAL Autocorrect Demo: Will send ACTUAL keystrokes!");
+    LOG_INF("🔥 REAL Autocorrect Demo: Will send ACTUAL keystrokes!");
     
     // Demo different typos
     const char* demo_typos[] = {"teh ", "adn ", "yuo ", "taht "};
@@ -172,12 +172,12 @@ static void autocorrect_demo_handler(struct k_work *work) {
 }
 
 static int zmk_autocorrect_init(const struct device *dev) {
-    LOG_INF("🎯 ZMK Autocorrect Detection Engine Loaded!");
-    LOG_INF("� DETECTS typos and shows correction actions");
+    LOG_INF("🔥 ZMK REAL AUTOCORRECT MODULE LOADED!");
+    LOG_INF("🚀 ACTUALLY FIXES TYPOS WITH REAL KEYSTROKES!");
     LOG_INF("✨ Initialized with %d correction patterns", NUM_CORRECTIONS);
     LOG_INF("⚡ Uses ZMK event system for REAL keystroke injection");
     LOG_INF("🎯 Will send actual backspace + correction keystrokes");
-    LOG_INF("� This is REAL autocorrect that works!");
+    LOG_INF("💪 This is REAL autocorrect that works!");
     
     // Clear input buffer
     memset(input_buffer, 0, BUFFER_SIZE);
