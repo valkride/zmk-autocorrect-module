@@ -187,6 +187,8 @@ static void process_autocorrect(void) {
         if (buffer_pos >= typo_len) {
             // Check if buffer ends with this typo
             if (strncmp(&input_buffer[buffer_pos - typo_len], typo, typo_len) == 0) {
+                LOG_INF("🚨 TYPO DETECTED LIVE! Found '%s' in your typing!", typo);
+                LOG_INF("🔧 FIXING IT NOW: '%s' → '%s'", typo, correction);
                 // Use behavior-based correction for REAL keystrokes
                 send_correction_via_behavior(typo, correction);
                 break;
@@ -203,6 +205,7 @@ static void add_char_to_buffer(char c) {
         
         // Process autocorrect on word boundaries (space, enter, etc.)
         if (c == ' ' || c == '\n' || c == '\t') {
+            LOG_INF("🔍 Word boundary reached, checking buffer: '%s'", input_buffer);
             process_autocorrect();
         }
     } else {
@@ -244,12 +247,12 @@ static void autocorrect_demo_handler(struct k_work *work) {
 }
 
 static int zmk_autocorrect_init(const struct device *dev) {
-    LOG_INF("🔥 ZMK BEHAVIOR-BASED AUTOCORRECT MODULE LOADED!");
-    LOG_INF("🚀 FIXES TYPOS WITH REAL BEHAVIOR-INJECTED KEYSTROKES!");
+    LOG_INF("🔥 LIVE AUTOCORRECT MODULE LOADED - WORKS ON REAL TYPING!");
+    LOG_INF("🚀 MONITORS EVERY KEYSTROKE + FIXES TYPOS INSTANTLY!");
     LOG_INF("✨ Initialized with %d correction patterns", NUM_CORRECTIONS);
-    LOG_INF("⚡ Uses zmk_behavior_invoke_binding for REAL keystroke injection");
-    LOG_INF("🎯 Sends actual behavior-based backspace + correction keystrokes");
-    LOG_INF("💪 This is REAL autocorrect using behavior system!");
+    LOG_INF("⚡ Real keystroke event listener + behavior-based corrections");
+    LOG_INF("🎯 Detects typos as you type + sends real correction keystrokes");
+    LOG_INF("💪 This is LIVE autocorrect that actually works while typing!");
     
     // Clear input buffer
     memset(input_buffer, 0, BUFFER_SIZE);
@@ -262,8 +265,52 @@ static int zmk_autocorrect_init(const struct device *dev) {
     k_work_schedule(&autocorrect_demo_work, K_SECONDS(15));
     
     LOG_INF("🚀 REAL autocorrect armed - live demo in 15 seconds!");
+    LOG_INF("⚡ Event listener registered - will correct REAL typos as you type!");
     return 0;
 }
+
+// REAL KEYSTROKE EVENT LISTENER FOR ACTUAL AUTOCORRECT!
+static int autocorrect_keycode_listener(const zmk_event_t *eh) {
+    struct zmk_keycode_state_changed *ev = as_zmk_keycode_state_changed(eh);
+    if (ev == NULL) return 0;
+
+    // Only process key presses (not releases)
+    if (!ev->state) return 0;
+    
+    // Convert keycode to character
+    uint16_t keycode = ev->keycode;
+    char c = 0;
+    
+    // Handle letters a-z
+    if (keycode >= HID_USAGE_KEY_KEYBOARD_A && keycode <= HID_USAGE_KEY_KEYBOARD_Z) {
+        c = 'a' + (keycode - HID_USAGE_KEY_KEYBOARD_A);
+    }
+    // Handle space
+    else if (keycode == HID_USAGE_KEY_KEYBOARD_SPACEBAR) {
+        c = ' ';
+    }
+    // Handle enter
+    else if (keycode == HID_USAGE_KEY_KEYBOARD_RETURN_ENTER) {
+        c = '\n';
+    }
+    
+    // If we got a valid character, add it to buffer and check for typos
+    if (c != 0) {
+        LOG_INF("🔍 Real keystroke detected: '%c' (keycode: %d)", c, keycode);
+        add_char_to_buffer(c);
+        
+        // Immediate typo checking on every keystroke!
+        if (c == ' ' || c == '\n') {
+            LOG_INF("💡 Word boundary detected - checking for typos to correct!");
+        }
+    }
+    
+    return 0;
+}
+
+// Register the event listener for REAL keystroke monitoring
+ZMK_LISTENER(autocorrect, autocorrect_keycode_listener);
+ZMK_SUBSCRIPTION(autocorrect, zmk_keycode_state_changed);
 
 // Initialize the autocorrect module
 SYS_INIT(zmk_autocorrect_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
