@@ -160,7 +160,6 @@ static void send_text_real(const char* text) {
 // REAL autocorrect using behavior system!
 static void perform_real_autocorrect(const char* typo, const char* correction) {
     int typo_len = strlen(typo);
-    int correction_len = strlen(correction);
     
     LOG_INF("🔥🔥🔥 REAL AUTOCORRECT ACTIVATED! 🔥🔥🔥");
     LOG_INF("   📝 FIXING TYPO: '%s' → '%s'", typo, correction);
@@ -273,10 +272,7 @@ static int zmk_autocorrect_init(const struct device *dev) {
     // Initialize the demo work handler
     k_work_init_delayable(&autocorrect_demo_work, autocorrect_demo_handler);
     
-    // Initialize active monitoring system
-    k_work_init_delayable(&active_monitor_work, active_monitor_handler);
-    
-    // Start both systems
+    // Start both systems (active_monitor_work is already defined with handler)
     k_work_schedule(&autocorrect_demo_work, K_SECONDS(15));
     k_work_schedule(&active_monitor_work, K_SECONDS(10));
     
@@ -338,7 +334,8 @@ bool autocorrect_process_keycode(uint16_t keycode, bool pressed, int64_t timesta
 }
 
 // ACTIVE MONITORING SYSTEM - Continuously checks for typos and corrects them
-static K_WORK_DELAYABLE_DEFINE(active_monitor_work, NULL);
+static void active_monitor_handler(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(active_monitor_work, active_monitor_handler);
 
 static void active_monitor_handler(struct k_work *work) {
     // Simulate common typing patterns that trigger autocorrect
