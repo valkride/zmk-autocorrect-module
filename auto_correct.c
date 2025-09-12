@@ -38,9 +38,9 @@ static bool correcting = false;
 // Convert character to ZMK keycode
 static uint32_t char_to_keycode(char c) {
     if (c >= 'a' && c <= 'z') {
-        return ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (c - 'a'));
+        return ZMK_HID_USAGE(HID_USAGE_KEY, (HID_USAGE_KEY_KEYBOARD_A + (c - 'a')));
     } else if (c >= 'A' && c <= 'Z') {
-        return ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (c - 'A'));
+        return ZMK_HID_USAGE(HID_USAGE_KEY, (HID_USAGE_KEY_KEYBOARD_A + (c - 'A')));
     }
     return 0;
 }
@@ -77,7 +77,7 @@ static void send_correction(const char* typo, const char* correction) {
             
             if (shift) {
                 raise_zmk_keycode_state_changed_from_encoded(
-                    ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_LEFT_SHIFT), 
+                    ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_LEFTSHIFT), 
                     true, timestamp);
                 k_msleep(5);
             }
@@ -89,7 +89,7 @@ static void send_correction(const char* typo, const char* correction) {
             if (shift) {
                 k_msleep(5);
                 raise_zmk_keycode_state_changed_from_encoded(
-                    ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_LEFT_SHIFT), 
+                    ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_LEFTSHIFT), 
                     false, timestamp + 2);
             }
             k_msleep(10);
