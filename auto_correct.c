@@ -183,6 +183,13 @@ static int behavior_autocorrect_init(const struct device *dev) {
     autocorrect_state.processing = false;
     autocorrect_state.length = 0;
     
+    // Register event listener manually to avoid subscription macro issues
+    int ret = zmk_event_manager_add_listener(&autocorrect_listener);
+    if (ret < 0) {
+        LOG_ERR("Failed to register autocorrect listener: %d", ret);
+        return ret;
+    }
+    
     LOG_INF("Autocorrect behavior initialized (disabled by default)");
     return 0;
 }
@@ -211,15 +218,10 @@ static const struct behavior_driver_api behavior_autocorrect_driver_api = {
     .binding_released = on_keymap_binding_released,
 };
 
-// Event listener setup - using a different approach to avoid linker issues
-static int autocorrect_listener_wrapper(const zmk_event_t *eh);
-
-ZMK_LISTENER(behavior_autocorrect, autocorrect_listener_wrapper);
-ZMK_SUBSCRIPTION(behavior_autocorrect, zmk_keycode_state_changed);
-
-static int autocorrect_listener_wrapper(const zmk_event_t *eh) {
-    return autocorrect_keycode_listener(eh);
-}
+// Manual event listener registration to avoid subscription issues
+static struct zmk_listener autocorrect_listener = {
+    .callback = autocorrect_keycode_listener,
+};
 
 #define AC_INST(n)                                                                                 \
     BEHAVIOR_DT_INST_DEFINE(n, behavior_autocorrect_init, NULL, NULL, NULL, POST_KERNEL,         \
