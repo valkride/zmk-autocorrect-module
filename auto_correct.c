@@ -135,9 +135,9 @@ static int autocorrect_keycode_listener(const zmk_event_t *eh) {
     // Check for word separators (space, punctuation, enter)
     if (keycode == HID_USAGE_KEY_KEYBOARD_SPACEBAR ||
         keycode == HID_USAGE_KEY_KEYBOARD_RETURN_ENTER ||
-        keycode == HID_USAGE_KEY_KEYBOARD_PERIOD ||
-        keycode == HID_USAGE_KEY_KEYBOARD_COMMA ||
-        keycode == HID_USAGE_KEY_KEYBOARD_SEMICOLON ||
+        keycode == HID_USAGE_KEY_KEYBOARD_PERIOD_AND_GREATER_THAN ||
+        keycode == HID_USAGE_KEY_KEYBOARD_COMMA_AND_LESS_THAN ||
+        keycode == HID_USAGE_KEY_KEYBOARD_SEMICOLON_AND_COLON ||
         keycode == HID_USAGE_KEY_KEYBOARD_APOSTROPHE_AND_QUOTE ||
         keycode == HID_USAGE_KEY_KEYBOARD_GRAVE_ACCENT_AND_TILDE) {
         check_and_correct();
