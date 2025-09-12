@@ -1,8 +1,0 @@
-/ {
-    behaviors {
-        autocorrect: behavior_autocorrect {
-            compatible = "zmk,behavior-autocorrect";
-            label = "AUTOCORRECT";
-        };
-    };
-};

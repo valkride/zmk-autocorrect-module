@@ -1,6 +1,0 @@
-config ZMK_AUTOCORRECT
-    bool "Enable ZMK Autocorrect Module"
-    default y
-    help
-      Enable autocorrect functionality for common typos
-
