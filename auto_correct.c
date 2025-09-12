@@ -5,9 +5,7 @@
 #include <zephyr/device.h>
 #include <drivers/behavior.h>
 
-#incl    LOG_INF("🔥 ZMK REAL AUTOCORRECT MODULE LOADED!");
-    LOG_INF("🚀 ACTUALLY FIXES TYPOS WITH REAL KEYSTROKES!");
-    LOG_INF("✨ Initialized with %d correction patterns", NUM_CORRECTIONS); <zmk/event_manager.h>
+#include <zmk/event_manager.h>
 #include <zmk/events/keycode_state_changed.h>
 #include <zmk/behavior.h>
 #include <zmk/keys.h>
