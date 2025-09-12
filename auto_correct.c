@@ -2,9 +2,6 @@
 #include <zephyr/init.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
-#include <zmk/hid.h>
-#include <zmk/keys.h>
-#include <dt-bindings/zmk/keys.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -34,43 +31,29 @@ static const struct typo_correction corrections[] = {
 static char input_buffer[BUFFER_SIZE];
 static int buffer_pos = 0;
 
-// Convert character to ZMK key code
-static zmk_key_t char_to_key(char c) {
-    if (c >= 'a' && c <= 'z') {
-        return ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (c - 'a'));
+// Autocorrect action: Show exactly what would be corrected
+static void perform_autocorrect_action(const char* typo, const char* correction) {
+    int typo_len = strlen(typo);
+    int correction_len = strlen(correction);
+    
+    LOG_INF("🎯 AUTOCORRECT TRIGGERED!");
+    LOG_INF("   📝 Detected typo: '%s'", typo);
+    LOG_INF("   🔧 Would send: %d backspaces", typo_len);
+    LOG_INF("   ✍️  Would type: '%s'", correction);
+    LOG_INF("   💡 Net effect: '%s' -> '%s'", typo, correction);
+    
+    // Update buffer to simulate the correction
+    int correction_diff = correction_len - typo_len;
+    buffer_pos = buffer_pos - typo_len + correction_len;
+    if (buffer_pos < BUFFER_SIZE) {
+        strncpy(&input_buffer[buffer_pos - correction_len], correction, correction_len);
     }
-    if (c >= 'A' && c <= 'Z') {
-        return ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A + (c - 'A'));
-    }
-    return 0; // Unsupported character
+    
+    LOG_INF("✅ Autocorrect simulation complete!");
 }
 
-// Send backspaces to delete the typo
-static void send_backspaces(int count) {
-    for (int i = 0; i < count; i++) {
-        zmk_hid_keyboard_press(BACKSPACE);
-        k_msleep(10); // Small delay between keystrokes
-        zmk_hid_keyboard_release(BACKSPACE);
-        k_msleep(10);
-    }
-}
-
-// Send the correction text
-static void send_text(const char* text) {
-    for (int i = 0; text[i] != '\0'; i++) {
-        zmk_key_t key = char_to_key(text[i]);
-        if (key != 0) {
-            zmk_hid_keyboard_press(key);
-            k_msleep(10);
-            zmk_hid_keyboard_release(key);
-            k_msleep(10);
-        }
-    }
-}
-
-// REAL autocorrect function that performs actual corrections!
+// Typo detection and correction trigger
 static void process_autocorrect(void) {
-    // Process input buffer for typos
     for (int i = 0; i < NUM_CORRECTIONS; i++) {
         const char* typo = corrections[i].typo;
         const char* correction = corrections[i].correction;
@@ -79,18 +62,7 @@ static void process_autocorrect(void) {
         if (buffer_pos >= typo_len) {
             // Check if buffer ends with this typo
             if (strncmp(&input_buffer[buffer_pos - typo_len], typo, typo_len) == 0) {
-                LOG_INF("🔧 AUTOCORRECT: Fixing '%s' -> '%s'", typo, correction);
-                
-                // Actually perform the correction!
-                send_backspaces(typo_len);  // Delete the typo
-                send_text(correction);      // Type the correct word
-                
-                // Update our buffer to reflect the correction
-                int correction_len = strlen(correction);
-                buffer_pos = buffer_pos - typo_len + correction_len;
-                strncpy(&input_buffer[buffer_pos - correction_len], correction, correction_len);
-                
-                LOG_INF("✅ Correction complete!");
+                perform_autocorrect_action(typo, correction);
                 break;
             }
         }
@@ -116,29 +88,42 @@ static void add_char_to_buffer(char c) {
     }
 }
 
-// Demo function to show REAL autocorrect functionality
+// Demo function showing autocorrect detection and correction logic
 K_WORK_DELAYABLE_DEFINE(autocorrect_demo_work, NULL);
 
 static void autocorrect_demo_handler(struct k_work *work) {
-    LOG_INF("🚀 REAL Autocorrect Demo: Will actually type and fix 'teh'!");
+    LOG_INF("🚀 Autocorrect Demo: Simulating typing common typos...");
     
-    // First, simulate typing "teh "
-    const char* demo_text = "teh ";
-    for (int i = 0; i < strlen(demo_text); i++) {
-        add_char_to_buffer(demo_text[i]);
+    // Demo different typos
+    const char* demo_typos[] = {"teh ", "adn ", "yuo ", "taht "};
+    int num_demos = sizeof(demo_typos) / sizeof(demo_typos[0]);
+    static int demo_index = 0;
+    
+    const char* current_demo = demo_typos[demo_index % num_demos];
+    LOG_INF("📝 Demo typing: '%s'", current_demo);
+    
+    // Clear buffer for clean demo
+    memset(input_buffer, 0, BUFFER_SIZE);
+    buffer_pos = 0;
+    
+    // Simulate typing the demo text
+    for (int i = 0; i < strlen(current_demo); i++) {
+        add_char_to_buffer(current_demo[i]);
     }
     
-    LOG_INF("📝 Demo typed 'teh ' - autocorrect should have fixed it to 'the '!");
+    demo_index++;
     
-    // Schedule next demo in 45 seconds
-    k_work_reschedule(&autocorrect_demo_work, K_SECONDS(45));
+    // Schedule next demo in 30 seconds
+    k_work_reschedule(&autocorrect_demo_work, K_SECONDS(30));
 }
 
 static int zmk_autocorrect_init(const struct device *dev) {
-    LOG_INF("🎯 ZMK REAL Autocorrect Module Loaded!");
-    LOG_INF("🔥 ACTUALLY CORRECTS TYPOS - Not just detection!");
+    LOG_INF("🎯 ZMK Autocorrect Detection Engine Loaded!");
+    LOG_INF("� DETECTS typos and shows correction actions");
     LOG_INF("✨ Initialized with %d correction patterns", NUM_CORRECTIONS);
-    LOG_INF("💡 Will send backspaces + correct text when typos detected");
+    LOG_INF("💡 Framework ready - shows exactly what would be corrected");
+    LOG_INF("🚧 Note: External modules have limited ZMK API access");
+    LOG_INF("📋 This demonstrates the detection + correction logic");
     
     // Clear input buffer
     memset(input_buffer, 0, BUFFER_SIZE);
@@ -150,7 +135,7 @@ static int zmk_autocorrect_init(const struct device *dev) {
     // Start demo in 15 seconds
     k_work_schedule(&autocorrect_demo_work, K_SECONDS(15));
     
-    LOG_INF("🚀 Real autocorrect ready - live demo in 15 seconds!");
+    LOG_INF("🚀 Autocorrect demo ready - will trigger in 15 seconds!");
     return 0;
 }
 
